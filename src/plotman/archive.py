@@ -20,7 +20,7 @@ def spawn_archive_process(dir_cfg, all_jobs):
     in the archive() function. Returns archiving status and a log message to print.'''
 
     log_message = None
-    archiving_status = None
+    archiving_status = ""
     
     # Look for running archive jobs.  Be robust to finding more than one
     # even though the scheduler should only run one at a time.
@@ -41,6 +41,7 @@ def spawn_archive_process(dir_cfg, all_jobs):
                     stderr=subprocess.STDOUT,
                     start_new_session=True) 
             log_message = 'Starting archive: ' + cmd
+    print(archiving_status, log_message)
     return archiving_status, log_message
             
 def compute_priority(phase, gb_free, n_plots):
@@ -77,8 +78,10 @@ def compute_priority(phase, gb_free, n_plots):
 
 def get_archdir_freebytes(arch_cfg):
     archdir_freebytes = {}
-    df_cmd = ('ssh %s@%s df -aBK | grep " %s/"' %
-        (arch_cfg.rsyncd_user, arch_cfg.rsyncd_host, arch_cfg.rsyncd_path) )
+    df_cmd = ('df -aBK | grep " %s"' %
+        (arch_cfg.rsyncd_path) )
+    #df_cmd = ('ssh %s@%s df -aBK | grep " %s/"' %
+    #    (arch_cfg.rsyncd_user, arch_cfg.rsyncd_host, arch_cfg.rsyncd_path) )
     with subprocess.Popen(df_cmd, shell=True, stdout=subprocess.PIPE) as proc:
         for line in proc.stdout.readlines():
             fields = line.split()
@@ -103,7 +106,8 @@ def get_running_archive_jobs(arch_cfg):
     '''Look for running rsync jobs that seem to match the pattern we use for archiving
        them.  Return a list of PIDs of matching jobs.'''
     jobs = []
-    dest = rsync_dest(arch_cfg, '/')
+    #dest = rsync_dest(arch_cfg, '/')
+    dest = arch_cfg.rsyncd_path
     for proc in psutil.process_iter(['pid', 'name']):
         with contextlib.suppress(psutil.NoSuchProcess):
             if proc.name() == 'rsync':
@@ -162,7 +166,9 @@ def archive(dir_cfg, all_jobs):
 
     bwlimit = dir_cfg.archive.rsyncd_bwlimit
     throttle_arg = ('--bwlimit=%d' % bwlimit) if bwlimit else ''
-    cmd = ('rsync %s --remove-source-files -P %s %s' %
-            (throttle_arg, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
+    #cmd = ('rsync %s --remove-source-files -P %s %s' %
+    #        (throttle_arg, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
+    cmd = ('rsync %s --remove-source-files -ah -P %s %s' % 
+            (throttle_arg, chosen_plot, dir_cfg.archive.rsyncd_path))
 
     return (True, cmd)
