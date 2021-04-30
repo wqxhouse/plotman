@@ -56,6 +56,7 @@ class Directories:
     log: str
     tmp: List[str]
     dst: List[str]
+    dst_same_as_tmp: bool = False
     tmp2: Optional[str] = None
     tmp_overrides: Optional[Dict[str, TmpOverrides]] = None
     archive: Optional[Archive] = None
