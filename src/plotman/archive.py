@@ -169,6 +169,6 @@ def archive(dir_cfg, all_jobs):
     #cmd = ('rsync %s --remove-source-files -P %s %s' %
     #        (throttle_arg, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
     cmd = ('rsync %s --remove-source-files -ah -P %s %s' % 
-            (throttle_arg, chosen_plot, dir_cfg.archive.rsyncd_path))
+            (throttle_arg, chosen_plot, archdir))
 
     return (True, cmd)
