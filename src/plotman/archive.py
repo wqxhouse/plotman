@@ -16,6 +16,42 @@ from plotman import job, manager, plot_util
 
 # TODO : write-protect and delete-protect archived plots
 
+def launch_rsync_async(cmd, dir_cfg) :
+    plotname = cmd[cmd.rfind("/plot-") + 1 : cmd.rfind(".plot")]
+    archive_file_name = os.path.join(dir_cfg.log, "archive_out_" + plotname + ".log")
+    try:
+        archive_file = open(archive_file_name, "x")
+    except FileExistsError:
+        # The desired log file name already exists.  Most likely another
+        # plotman process already launched a new process in response to
+        # the same scenario that triggered us.  Let's at least not
+        # confuse things further by having two plotting processes
+        # logging to the same file.  If we really should launch another
+        # plotting process, we'll get it at the next check cycle anyways.
+        message = (
+            f'Archive log file already exists, skipping attempt to start a'
+            f' new plot: {archive_file_name!r}'
+        )
+        # print(message)
+        archive_file = open(archive_file_name, 'w')
+        return
+    except FileNotFoundError as e:
+        message = (
+            f'Unable to open log file.  Verify that the directory exists'
+            f' and has proper write permissions: {archive_file_name!r}'
+        )
+        raise Exception(message) from e
+
+    
+    with archive_file :
+        p = subprocess.Popen(cmd,
+            shell=True,
+            stdout=archive_file,
+            stderr=archive_file,
+            start_new_session=True)
+        return p
+
+
 def spawn_archive_process(dir_cfg, all_jobs):
     '''Spawns a new archive process using the command created
     in the archive() function. Returns archiving status and a log message to print.'''
@@ -34,11 +70,7 @@ def spawn_archive_process(dir_cfg, all_jobs):
         else:
             cmd = status_or_cmd
             # TODO: do something useful with output instead of DEVNULL
-            p = subprocess.Popen(cmd,
-                    shell=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.STDOUT,
-                    start_new_session=True)
+            p = launch_rsync_async(cmd, dir_cfg)
             log_message = 'Starting archive: ' + cmd
             # At least for now it seems that even if we get a new running
             # archive jobs list it doesn't contain the new rsync process.
@@ -172,7 +204,7 @@ def archive(dir_cfg, all_jobs):
 
     bwlimit = dir_cfg.archive.rsyncd_bwlimit
     throttle_arg = ('--bwlimit=%d' % bwlimit) if bwlimit else ''
-    cmd = ('rsync %s --compress-level=0 --remove-source-files -P %s %s' %
+    cmd = ('rsync %s -v -h --compress-level=0 --remove-source-files -P %s %s' %
             (throttle_arg, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
 
     return (True, cmd)
