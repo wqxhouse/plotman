@@ -110,6 +110,9 @@ def compute_priority(phase, gb_free, n_plots):
         priority += 1 + int((1000 - gb_free) / 100)
     if (gb_free < 500):
         priority += 1 + int((500 - gb_free) / 100)
+    if (gb_free < 110):
+        # Needs to drive  unable to proceed the top priority
+        priority += 1000
 
     # Finally, least importantly, pick drives with more plots
     # over those with fewer.
