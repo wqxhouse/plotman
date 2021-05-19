@@ -37,7 +37,9 @@ class PlotmanArgParser:
 
         sp.add_parser('plot', help='run plotting loop')
 
-        sp.add_parser('archive', help='move completed plots to farming location')
+        p_archive = sp.add_parser('archive', help='move completed plots to farming location')
+        sp_archive = p_archive.add_subparsers(dest='archive_subcommand')
+        sp_archive.add_parser('show', help="show status of currently ongoing archive action")
 
         p_config = sp.add_parser('config', help='display or generate plotman.yaml configuration')
         sp_config = p_config.add_subparsers(dest='config_subcommand')
@@ -180,18 +182,22 @@ def main():
 
         # Start running archival
         elif args.cmd == 'archive':
-            print('...starting archive loop')
-            firstit = True
-            while True:
-                if not firstit:
-                    print('Sleeping 60s until next iteration...')
-                    time.sleep(60)
-                    jobs = Job.get_running_jobs(cfg.directories.log)
-                firstit = False
+            if args.archive_subcommand == 'show':
+                archive.get_running_archive_logs(cfg.directories)
 
-                archiving_status, log_message = archive.spawn_archive_process(cfg.directories, jobs)
-                if log_message:
-                    print(log_message)
+            else :
+                print('...starting archive loop')
+                firstit = True
+                while True:
+                    if not firstit:
+                        print('Sleeping 60s until next iteration...')
+                        time.sleep(60)
+                        jobs = Job.get_running_jobs(cfg.directories.log)
+                    firstit = False
+
+                    archiving_status, log_message = archive.spawn_archive_process(cfg.directories, jobs)
+                    if log_message:
+                        print(log_message)
 
 
         # Debugging: show the destination drive usage schedule

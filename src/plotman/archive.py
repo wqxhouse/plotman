@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime
+import re
 
 import psutil
 import texttable as tt
@@ -142,6 +143,18 @@ def rsync_dest(arch_cfg, arch_dir):
     rsync_url = 'rsync://%s@%s:12000/%s' % (
             arch_cfg.rsyncd_user, arch_cfg.rsyncd_host, rsync_path)
     return rsync_url
+
+def get_running_archive_logs(cfg_directories) :
+    arch_jobs = get_running_archive_jobs(cfg_directories.archive)
+    archive_file_name_regex = os.path.join(cfg_directories.log, "archive_out_plot-.{1,}\.log")
+    for pid in arch_jobs:
+        out = subprocess.check_output(f"lsof -p {pid}", shell=True, start_new_session=True).decode('utf-8')
+        result = re.search(archive_file_name_regex, out)
+        if result :
+            file_path = out[result.start() : result.end()]
+            print(f"PID {pid}: {file_path}")
+            with open(file_path, 'r') as f:
+                print([i for i in f.read().split('\n') if i][-1])
 
 # TODO: maybe consolidate with similar code in job.py?
 def get_running_archive_jobs(arch_cfg):
