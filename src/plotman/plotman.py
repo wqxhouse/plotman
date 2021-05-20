@@ -40,6 +40,7 @@ class PlotmanArgParser:
         p_archive = sp.add_parser('archive', help='move completed plots to farming location')
         sp_archive = p_archive.add_subparsers(dest='archive_subcommand')
         sp_archive.add_parser('show', help="show status of currently ongoing archive action")
+        sp_archive.add_parser('next', help="show next plot to archive")
 
         p_config = sp.add_parser('config', help='display or generate plotman.yaml configuration')
         sp_config = p_config.add_subparsers(dest='config_subcommand')
@@ -184,7 +185,10 @@ def main():
         elif args.cmd == 'archive':
             if args.archive_subcommand == 'show':
                 archive.get_running_archive_logs(cfg.directories)
-
+            if args.archive_subcommand == 'next':
+                chosen_plot = archive.next_chosen_plot(cfg.directories, Job.get_running_jobs(cfg.directories.log))
+                if chosen_plot :
+                    print(f"Chosen plot for archive is {chosen_plot}")
             else :
                 print('...starting archive loop')
                 firstit = True

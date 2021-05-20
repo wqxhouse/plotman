@@ -111,9 +111,23 @@ def compute_priority(phase, gb_free, n_plots):
         priority += 1 + int((1000 - gb_free) / 100)
     if (gb_free < 500):
         priority += 1 + int((500 - gb_free) / 100)
-    if (gb_free < 110):
+    if (gb_free < 250):
         # Needs to drive  unable to proceed the top priority
+        priority += 10
+    if (gb_free < 110):
         priority += 1000
+    if (gb_free < 50):
+        priority += 10000
+    if (gb_free < 25):
+        priority += 100000
+    if (gb_free < 12):
+        priority += 1000000
+    if (gb_free < 6):
+        priority += 10000000
+    if (gb_free < 3):
+        priority += 100000000
+    if (gb_free == 0):
+        priority += 1000000000
 
     # Finally, least importantly, pick drives with more plots
     # over those with fewer.
@@ -171,14 +185,7 @@ def get_running_archive_jobs(arch_cfg):
                         jobs.append(proc.pid)
     return jobs
 
-def archive(dir_cfg, all_jobs):
-    '''Configure one archive job.  Needs to know all jobs so it can avoid IO
-    contention on the plotting dstdir drives.  Returns either (False, <reason>)
-    if we should not execute an archive job or (True, <cmd>) with the archive
-    command if we should.'''
-    if dir_cfg.archive is None:
-        return (False, "No 'archive' settings declared in plotman.yaml")
-
+def next_chosen_plot(dir_cfg, all_jobs):
     dir2ph = manager.dstdirs_to_furthest_phase(all_jobs)
     best_priority = -100000000
     chosen_plot = None
@@ -193,6 +200,17 @@ def archive(dir_cfg, all_jobs):
             best_priority = priority
             chosen_plot = dir_plots[0]
 
+    return chosen_plot
+
+def archive(dir_cfg, all_jobs):
+    '''Configure one archive job.  Needs to know all jobs so it can avoid IO
+    contention on the plotting dstdir drives.  Returns either (False, <reason>)
+    if we should not execute an archive job or (True, <cmd>) with the archive
+    command if we should.'''
+    if dir_cfg.archive is None:
+        return (False, "No 'archive' settings declared in plotman.yaml")
+
+    chosen_plot = next_chosen_plot(dir_cfg, all_jobs)
     if not chosen_plot:
         return (False, 'No plots found')
 
