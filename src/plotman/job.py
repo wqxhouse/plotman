@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 from enum import Enum, auto
 from subprocess import call
+import glob
 
 import attr
 import click
@@ -423,15 +424,23 @@ class Job:
         self.proc.resume()
 
     def get_temp_files(self):
-        # Prevent duplicate file paths by using set.
-        temp_files = set([])
+        single_file_path = None
         for f in self.proc.open_files():
             if any(
                 dir in f.path
                 for dir in [self.tmpdir, self.tmp2dir, self.dstdir]
                 if dir is not None
             ):
-                temp_files.add(f.path)
+                single_file_path = f.path
+                break
+
+        # Some associated files are not opened by the process at a specific time, so a glob
+        # through the directory is necessary
+        full_plot_id_start = single_file_path.find(self.plot_id)
+        full_plot_id_end = single_file_path.find(".plot", full_plot_id_start)
+        full_plot_id = single_file_path[full_plot_id_start : full_plot_id_end]
+        glob_path = os.path.join(os.path.dirname(single_file_path), f"*{full_plot_id}*")
+        temp_files = glob.glob(glob_path)
         return temp_files
 
     def cancel(self):
