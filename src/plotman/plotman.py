@@ -185,7 +185,7 @@ def main():
         elif args.cmd == 'archive':
             if args.archive_subcommand == 'show':
                 archive.get_running_archive_logs(cfg.directories)
-            if args.archive_subcommand == 'next':
+            elif args.archive_subcommand == 'next':
                 chosen_plot = archive.next_chosen_plot(cfg.directories, Job.get_running_jobs(cfg.directories.log))
                 if chosen_plot :
                     print(f"Chosen plot for archive is {chosen_plot}")
