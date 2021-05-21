@@ -35,7 +35,6 @@ def launch_rsync_async(cmd, dir_cfg) :
         )
         # print(message)
         archive_file = open(archive_file_name, 'w')
-        return
     except FileNotFoundError as e:
         message = (
             f'Unable to open log file.  Verify that the directory exists'
