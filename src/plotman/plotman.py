@@ -168,7 +168,7 @@ def main():
         # Status report
         if args.cmd == 'status':
             result = "{0}\n\n{1}\n\nUpdated at: {2}".format(
-                reporting.status_report(jobs, get_term_width()),
+                reporting.status_report_ex(jobs, get_term_width()),
                 reporting.summary(jobs),
                 datetime.datetime.today().strftime("%c"),
             )

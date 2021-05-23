@@ -6,7 +6,8 @@ import texttable as tt  # from somewhere?
 from itertools import groupby
 
 from plotman import archive, job, manager, plot_util
-
+import subprocess
+import re
 
 def abbr_path(path, putative_prefix):
     if putative_prefix and path.startswith(putative_prefix):
@@ -114,6 +115,130 @@ def status_report(jobs, width, height=None, tmp_prefix='', dst_prefix=''):
                         plot_util.time_format(j.get_time_user()), # user system time
                         plot_util.time_format(j.get_time_sys()), # system time
                         plot_util.time_format(j.get_time_iowait()) # io wait
+                        ]
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                # In case the job has disappeared
+                row = [j.plot_id[:8]] + (['--'] * 12)
+
+            if height:
+                row.insert(0, '%3d' % i)
+
+        tab.add_row(row)
+
+    tab.set_max_width(width)
+    tab.set_deco(0)  # No borders
+
+    return tab.draw()
+
+def status_report_ex(jobs, width, height=None, tmp_prefix='', dst_prefix=''):
+    '''height, if provided, will limit the number of rows in the table,
+       showing first and last rows, row numbers and an elipsis in the middle.'''
+    abbreviate_jobs_list = False
+    n_begin_rows = 0
+    n_end_rows = 0
+    if height and height < len(jobs) + 1:  # One row for header
+        abbreviate_jobs_list = True
+
+    if abbreviate_jobs_list:
+        n_rows = height - 2  # Minus one for header, one for ellipsis
+        n_begin_rows = int(n_rows / 2)
+        n_end_rows = n_rows - n_begin_rows
+
+    tab = tt.Texttable()
+    headings = ['plot id', 'k', 'tmp', 'dst', 'wall', 'phase', 'tmp',
+            'pid', 'stat', 'mem', 'user', 'sys', 'io', 'cpus', 'numa', 'proc', 'switches']
+    if height:
+        headings.insert(0, '#')
+    tab.header(headings)
+    tab.set_cols_dtype('t' * len(headings))
+    tab.set_cols_align('r' * len(headings))
+    tab.set_header_align('r' * len(headings))
+
+    out = subprocess.check_output("numactl --hardware", shell=True, start_new_session=True).decode("utf-8")
+    re_iter = re.finditer("node [\d] cpus: ", out)
+    node_cpu_lists = []
+    cpu_cnt = 0
+    for match in re_iter:
+        list_start_index = match.end(0)
+        node_cpu_list = list(map(int, out[list_start_index : out.find("\n", list_start_index)].split()))
+        cpu_cnt += len(node_cpu_list)
+        node_cpu_lists.append(node_cpu_list)
+
+    numa_cpus = [-1]*cpu_cnt # index = cpu, value = numa node
+    for numa_node in range (len(node_cpu_lists)) :
+        for cpu in node_cpu_lists[numa_node] :
+            numa_cpus[cpu] = numa_node
+
+    out = subprocess.check_output("ps -U $USER -LP | egrep 'chia$|PID'", shell=True, start_new_session=True).decode('utf-8')
+    process_cpu_info_arr = out.split("\n")[1:]
+    pid_to_thread_info = {}
+    for entry in process_cpu_info_arr:
+        cols = entry.split()
+        if len(cols) != 0:
+            pid = cols[0]
+            # thread_id = cols[1]
+            processor = cols[2]
+            pid_int = int(pid)
+            if pid_int not in pid_to_thread_info:
+                pid_to_thread_info[pid_int] = []
+
+            pid_to_thread_info[pid_int].append(int(processor))
+
+
+    # calculate whether all cpus are in the same numa node
+    pid_to_numa_yn = {}
+    for pid, cpus in pid_to_thread_info.items() :
+        pid_to_numa_yn[pid] = 'Y'
+        prev_numa_node = numa_cpus[cpus[0]]
+        for i in range(1, len(cpus)):
+            if numa_cpus[cpus[i]] != prev_numa_node :
+                pid_to_numa_yn[pid] = 'N'
+                break
+
+            prev_numa_node = numa_cpus[cpus[i]] 
+
+
+    cpu_to_pids = {}
+    for pid, cpus in pid_to_thread_info.items():
+        for cpu in cpus :
+            if cpu not in cpu_to_pids :
+                cpu_to_pids[cpu] = []
+            cpu_to_pids[cpu].append(pid)
+
+    print("List of cpu that are shared between processes")
+    for cpu in cpu_to_pids :
+        if len(cpu_to_pids[cpu]) != 1 :
+            print(f"{cpu} : {cpu_to_pids[cpu]}")
+    
+    for i, j in enumerate(sorted(jobs, key=job.Job.get_time_wall)):
+        # Elipsis row
+        if abbreviate_jobs_list and i == n_begin_rows:
+            row = ['...'] + ([''] * (len(headings) - 1))
+        # Omitted row
+        elif abbreviate_jobs_list and i > n_begin_rows and i < (len(jobs) - n_end_rows):
+            continue
+
+        # Regular row
+        else:
+            try:
+                with j.proc.oneshot():
+                    row = [j.plot_id[:8], # Plot ID
+                        j.k, # k size
+                        abbr_path(j.tmpdir, tmp_prefix), # Temp directory
+                        abbr_path(j.dstdir, dst_prefix), # Destination directory
+                        plot_util.time_format(j.get_time_wall()), # Time wall
+                        phase_str(j.progress()), # Overall progress (major:minor)
+                        plot_util.human_format(j.get_tmp_usage(), 0), # Current temp file size
+                        j.proc.pid, # System pid
+                        j.get_run_status(), # OS status for the job process
+                        plot_util.human_format(j.get_mem_usage(), 1), # Memory usage
+                        plot_util.time_format(j.get_time_user()), # user system time
+                        plot_util.time_format(j.get_time_sys()), # system time
+                        plot_util.time_format(j.get_time_iowait()), # io wait
+                        pid_to_thread_info[j.proc.pid],
+                        pid_to_numa_yn[j.proc.pid],
+                        j.proc.pid,
+                        j.proc.num_ctx_switches()
                         ]
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 # In case the job has disappeared
