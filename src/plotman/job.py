@@ -45,6 +45,13 @@ def parse_chia_plot_time(s):
 
 def parse_chia_plots_create_command_line(command_line):
     command_line = list(command_line)
+    if len(command_line) == 0:
+        return ParsedChiaPlotsCreateCommand(
+            error="Empty command line",
+            help = {},
+            parameters = {}
+        )
+
     # Parse command line args
     if 'python' in command_line[0].lower():
         command_line = command_line[1:]

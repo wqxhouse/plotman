@@ -51,6 +51,22 @@ def launch_rsync_async(cmd, dir_cfg) :
             start_new_session=True)
         return p
 
+def get_eligible_tunnel_ips(arch_jobs) :
+    out = subprocess.check_output("ifconfig", shell=True, start_new_session=True).decode("utf-8")
+    ips = [ip[5:] for ip in list(re.findall("inet \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", out))]
+    if "127.0.0.1" in ips :
+        ips.remove("127.0.0.1")
+    for job in arch_jobs :
+        if job[2] != 'D' :
+            running_tunnel_ip = job[2]
+            if running_tunnel_ip not in ips :
+                print("Something is wrong")
+            else :
+                ips.remove(running_tunnel_ip)
+        # else :
+            # cannot avoid potentially and ip dest
+
+    return ips
 
 def spawn_archive_process(dir_cfg, all_jobs):
     '''Spawns a new archive process using the command created
@@ -59,29 +75,29 @@ def spawn_archive_process(dir_cfg, all_jobs):
     log_message = None
     archiving_status = None
 
-    # Look for running archive jobs.  Be robust to finding more than one
-    # even though the scheduler should only run one at a time.
+    # Look for running archive jobs.  
     arch_jobs = get_running_archive_jobs(dir_cfg.archive)
+    (should_start, status_or_cmd) = archive(dir_cfg, all_jobs, arch_jobs)
+    if not should_start:
+        archiving_status = status_or_cmd
+    else:
+        cmd = status_or_cmd
+        # TODO: do something useful with output instead of DEVNULL
+        p = launch_rsync_async(cmd, dir_cfg)
+        log_message = 'Starting archive: ' + cmd
+        # At least for now it seems that even if we get a new running
+        # archive jobs list it doesn't contain the new rsync process.
+        # My guess is that this is because the bash in the middle due to
+        # shell=True is still starting up and really hasn't launched the
+        # new rsync process yet.  So, just put a placeholder here.  It
+        # will get filled on the next cycle.
+        arch_jobs.append(('<pending>', '?.plot', 'D'))
 
-    if not arch_jobs:
-        (should_start, status_or_cmd) = archive(dir_cfg, all_jobs)
-        if not should_start:
-            archiving_status = status_or_cmd
-        else:
-            cmd = status_or_cmd
-            # TODO: do something useful with output instead of DEVNULL
-            p = launch_rsync_async(cmd, dir_cfg)
-            log_message = 'Starting archive: ' + cmd
-            # At least for now it seems that even if we get a new running
-            # archive jobs list it doesn't contain the new rsync process.
-            # My guess is that this is because the bash in the middle due to
-            # shell=True is still starting up and really hasn't launched the
-            # new rsync process yet.  So, just put a placeholder here.  It
-            # will get filled on the next cycle.
-            arch_jobs.append('<pending>')
-
+    all_archiving_pids = []
+    for arch_j in arch_jobs :
+        all_archiving_pids.append(arch_j[0])
     if archiving_status is None:
-        archiving_status = 'pid: ' + ', '.join(map(str, arch_jobs))
+        archiving_status = 'pid: ' + ', '.join(map(str, all_archiving_pids))
 
     return archiving_status, log_message
 
@@ -160,7 +176,8 @@ def rsync_dest(arch_cfg, arch_dir):
 def get_running_archive_logs(cfg_directories) :
     arch_jobs = get_running_archive_jobs(cfg_directories.archive)
     archive_file_name_regex = os.path.join(cfg_directories.log, "archive_out_plot-.{1,}\.log")
-    for pid in arch_jobs:
+    for j in arch_jobs:
+        pid = j[0]
         out = subprocess.check_output(f"lsof -p {pid}", shell=True, start_new_session=True).decode('utf-8')
         result = re.search(archive_file_name_regex, out)
         if result :
@@ -179,12 +196,30 @@ def get_running_archive_jobs(arch_cfg):
         with contextlib.suppress(psutil.NoSuchProcess):
             if proc.name() == 'rsync':
                 args = proc.cmdline()
+                tunnel_ip = "D"
+                found_pid = None
+                plot_name = None
                 for arg in args:
                     if arg.startswith(dest):
-                        jobs.append(proc.pid)
+                        found_pid = proc.pid
+                    if arg.endswith(".plot"):
+                        plot_name = arg
+                    if arg.startswith("--address"):
+                        start_idx = len("--address=")
+                        tunnel_ip = arg[start_idx :]
+                if found_pid :
+                    jobs.append((found_pid, plot_name, tunnel_ip))
     return jobs
 
-def next_chosen_plot(dir_cfg, all_jobs):
+def next_chosen_plot_cli(dir_cfg, all_jobs):
+    arch_jobs = get_running_archive_jobs(dir_cfg.archive)
+    return next_chosen_plot(dir_cfg, all_jobs, arch_jobs)
+
+def next_chosen_plot(dir_cfg, all_jobs, arch_jobs):
+    cur_archiving_plots = []
+    for arch_job in arch_jobs:
+        cur_archiving_plots.append(arch_job[1])
+
     dir2ph = manager.dstdirs_to_furthest_phase(all_jobs)
     best_priority = -100000000
     chosen_plot = None
@@ -192,16 +227,21 @@ def next_chosen_plot(dir_cfg, all_jobs):
     for d in dst_dir:
         ph = dir2ph.get(d, job.Phase(0, 0))
         dir_plots = plot_util.list_k32_plots(d)
+
         gb_free = plot_util.df_b(d) / plot_util.GB
         n_plots = len(dir_plots)
         priority = compute_priority(ph, gb_free, n_plots)
         if priority >= best_priority and dir_plots:
             best_priority = priority
-            chosen_plot = dir_plots[0]
+
+            for plot_candidate in dir_plots :
+                if plot_candidate not in cur_archiving_plots:
+                    chosen_plot = plot_candidate
+                    break
 
     return chosen_plot
 
-def archive(dir_cfg, all_jobs):
+def archive(dir_cfg, all_jobs, arch_jobs):
     '''Configure one archive job.  Needs to know all jobs so it can avoid IO
     contention on the plotting dstdir drives.  Returns either (False, <reason>)
     if we should not execute an archive job or (True, <cmd>) with the archive
@@ -209,9 +249,15 @@ def archive(dir_cfg, all_jobs):
     if dir_cfg.archive is None:
         return (False, "No 'archive' settings declared in plotman.yaml")
 
-    chosen_plot = next_chosen_plot(dir_cfg, all_jobs)
+    chosen_plot = next_chosen_plot(dir_cfg, all_jobs, arch_jobs)
     if not chosen_plot:
         return (False, 'No plots found')
+
+    tunnel_ips = get_eligible_tunnel_ips(arch_jobs)
+    if not tunnel_ips :
+        # return (False, 'No eligible tunnel ip left')
+        return (False, None)
+    selected_tunnel_ip = tunnel_ips[0]
 
     # TODO: sanity check that archive machine is available
     # TODO: filter drives mounted RO
@@ -237,7 +283,7 @@ def archive(dir_cfg, all_jobs):
 
     bwlimit = dir_cfg.archive.rsyncd_bwlimit
     throttle_arg = ('--bwlimit=%d' % bwlimit) if bwlimit else ''
-    cmd = ('rsync %s -v -h --compress-level=0 --remove-source-files -P %s %s' %
-            (throttle_arg, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
+    cmd = ('rsync %s -v -h --compress-level=0 --address=%s --remove-source-files -P %s %s' %
+            (throttle_arg, selected_tunnel_ip, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
 
     return (True, cmd)
