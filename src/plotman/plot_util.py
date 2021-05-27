@@ -2,6 +2,7 @@ import math
 import os
 import re
 import shutil
+import subprocess
 
 GB = 1_000_000_000
 
@@ -80,3 +81,27 @@ def column_wrap(items, n_cols, filler=None):
         # Pad and truncate
         rows.append( (row_items + ([filler] * n_cols))[:n_cols] )
     return rows
+
+def get_numa_cpu_list() :
+    out = subprocess.check_output("numactl --hardware", shell=True, start_new_session=True).decode("utf-8")
+    re_iter = re.finditer("node [\d] cpus: ", out)
+    node_cpu_lists = []
+    for match in re_iter:
+        list_start_index = match.end(0)
+        node_cpu_list = list(map(int, out[list_start_index : out.find("\n", list_start_index)].split()))
+        node_cpu_lists.append(node_cpu_list)
+
+    return node_cpu_lists
+
+def get_cpu_to_numa_node() :
+    node_cpu_lists = get_numa_cpu_list() 
+    cpu_cnt = 0
+    for cpu_list in node_cpu_lists:
+        cpu_cnt += len(cpu_list)
+
+    numa_cpus = [-1]*cpu_cnt # index = cpu, value = numa node
+    for numa_node in range (len(node_cpu_lists)) :
+        for cpu in node_cpu_lists[numa_node] :
+            numa_cpus[cpu] = numa_node
+
+    return numa_cpus

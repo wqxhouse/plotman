@@ -154,21 +154,7 @@ def status_report_ex(jobs, width, height=None, tmp_prefix='', dst_prefix=''):
     tab.set_cols_align('r' * len(headings))
     tab.set_header_align('r' * len(headings))
 
-    out = subprocess.check_output("numactl --hardware", shell=True, start_new_session=True).decode("utf-8")
-    re_iter = re.finditer("node [\d] cpus: ", out)
-    node_cpu_lists = []
-    cpu_cnt = 0
-    for match in re_iter:
-        list_start_index = match.end(0)
-        node_cpu_list = list(map(int, out[list_start_index : out.find("\n", list_start_index)].split()))
-        cpu_cnt += len(node_cpu_list)
-        node_cpu_lists.append(node_cpu_list)
-
-    numa_cpus = [-1]*cpu_cnt # index = cpu, value = numa node
-    for numa_node in range (len(node_cpu_lists)) :
-        for cpu in node_cpu_lists[numa_node] :
-            numa_cpus[cpu] = numa_node
-
+  
     out = subprocess.check_output("ps -U $USER -LP | egrep 'chia$|PID'", shell=True, start_new_session=True).decode('utf-8')
     process_cpu_info_arr = out.split("\n")[1:]
     pid_to_thread_info = {}
@@ -185,6 +171,8 @@ def status_report_ex(jobs, width, height=None, tmp_prefix='', dst_prefix=''):
             pid_to_thread_info[pid_int].append(int(processor))
 
 
+    numa_cpus = plot_util.get_cpu_to_numa_node()
+    
     # calculate whether all cpus are in the same numa node
     pid_to_numa_yn = {}
     for pid, cpus in pid_to_thread_info.items() :
