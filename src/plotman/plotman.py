@@ -256,7 +256,11 @@ def main():
                         job.cancel()
                         print('cleaning up temp files...')
                         for f in temp_files:
+                            print(f"Removing {f}...", end='')
                             os.remove(f)
+                            # sleep 100ms between files to prevent ssd controller stop responding
+                            time.sleep(0.1)
+                            print(f"Done!")
 
                 elif args.cmd == 'suspend':
                     print('Suspending ' + job.plot_id)

@@ -385,14 +385,17 @@ class Job:
 
     def get_tmp_usage(self):
         total_bytes = 0
-        with os.scandir(self.tmpdir) as it:
-            for entry in it:
-                if self.plot_id in entry.name:
-                    try:
-                        total_bytes += entry.stat().st_size
-                    except FileNotFoundError:
-                        # The file might disappear; this being an estimate we don't care
-                        pass
+        try:
+            with os.scandir(self.tmpdir) as it:
+                for entry in it:
+                    if self.plot_id in entry.name:
+                        try:
+                            total_bytes += entry.stat().st_size
+                        except FileNotFoundError:
+                            # The file might disappear; this being an estimate we don't care
+                            pass
+        except OSError as e:
+            print(f"ERROR: {e}\n dir: {self.tmpdir}")
         return total_bytes
 
     def get_run_status(self):
@@ -444,6 +447,10 @@ class Job:
             ):
                 single_file_path = f.path
                 break
+
+        if not single_file_path:
+            print(f"ERROR: not able to locate dir. The drive may be down.")
+            return []
 
         # Some associated files are not opened by the process at a specific time, so a glob
         # through the directory is necessary
