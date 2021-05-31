@@ -220,6 +220,13 @@ def main():
             # TODO: clean up treatment of wildcard
             if args.idprefix[0] == 'all':
                 selected = jobs
+            elif args.idprefix[0] == 'tmpdir':
+                if len(args.idprefix) != 2:
+                    print("Need to specify tmpdir path")
+                else :
+                    print(f"Selecting all jobs writing to tmpdir {args.idprefix[1]}")
+                    selected = manager.select_jobs_by_tmpdir(jobs, args.idprefix[1])
+
             else:
                 # TODO: allow multiple idprefixes, not just take the first
                 selected = manager.select_jobs_by_partial_id(jobs, args.idprefix[0])
@@ -259,7 +266,7 @@ def main():
                             print(f"Removing {f}...", end='')
                             os.remove(f)
                             # sleep 100ms between files to prevent ssd controller stop responding
-                            time.sleep(0.1)
+                            time.sleep(0.02)
                             print(f"Done!")
 
                 elif args.cmd == 'suspend':

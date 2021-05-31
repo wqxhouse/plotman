@@ -77,6 +77,7 @@ def spawn_archive_process(dir_cfg, all_jobs):
 
     # Look for running archive jobs.  
     arch_jobs = get_running_archive_jobs(dir_cfg.archive)
+
     (should_start, status_or_cmd) = archive(dir_cfg, all_jobs, arch_jobs)
     if not should_start:
         archiving_status = status_or_cmd
@@ -249,15 +250,19 @@ def archive(dir_cfg, all_jobs, arch_jobs):
     if dir_cfg.archive is None:
         return (False, "No 'archive' settings declared in plotman.yaml")
 
+    max_arch_jobs = dir_cfg.archive.max_concurrent_transfer if dir_cfg.archive.max_concurrent_transfer else 1
+    if len(arch_jobs) >= max_arch_jobs :
+        return (False, None)
+
     chosen_plot = next_chosen_plot(dir_cfg, all_jobs, arch_jobs)
     if not chosen_plot:
         return (False, 'No plots found')
 
-    tunnel_ips = get_eligible_tunnel_ips(arch_jobs)
-    if not tunnel_ips :
-        # return (False, 'No eligible tunnel ip left')
-        return (False, None)
-    selected_tunnel_ip = tunnel_ips[0]
+    # tunnel_ips = get_eligible_tunnel_ips(arch_jobs)
+    # if not tunnel_ips :
+    #     # return (False, 'No eligible tunnel ip left')
+    #     return (False, None)
+    # selected_tunnel_ip = tunnel_ips[0]
 
     # TODO: sanity check that archive machine is available
     # TODO: filter drives mounted RO
@@ -283,7 +288,9 @@ def archive(dir_cfg, all_jobs, arch_jobs):
 
     bwlimit = dir_cfg.archive.rsyncd_bwlimit
     throttle_arg = ('--bwlimit=%d' % bwlimit) if bwlimit else ''
-    cmd = ('rsync %s -v -h --compress-level=0 --address=%s --remove-source-files -P %s %s' %
-            (throttle_arg, selected_tunnel_ip, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
+    # cmd = ('rsync %s -v -h --compress-level=0 --address=%s --remove-source-files -P %s %s' %
+    #         (throttle_arg, selected_tunnel_ip, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
+    cmd = ('rsync %s -v -h --compress-level=0 --remove-source-files -P %s %s' %
+            (throttle_arg, chosen_plot, rsync_dest(dir_cfg.archive, archdir)))
 
     return (True, cmd)

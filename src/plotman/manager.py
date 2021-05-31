@@ -174,6 +174,15 @@ def maybe_start_new_plot(dir_cfg, sched_cfg, plotting_cfg):
                     start_new_session=True)
 
             psutil.Process(p.pid).nice(15)
+
+            # TODO: if -2 is specified, need to change numa node for -2 dir if it's different from -t
+            if dir_cfg.tmp_numa_node is not None and tmpdir in dir_cfg.tmp_numa_node :
+                tmpdir_numa_node = dir_cfg.tmp_numa_node[tmpdir].tmpdir_numa_node
+                numa_cpu_list = plot_util.get_numa_cpu_list()
+                if tmpdir_numa_node < len(numa_cpu_list) :
+                    cpus_chosen = numa_cpu_list[tmpdir_numa_node]
+                    # print(cpus_chosen)
+                    psutil.Process(p.pid).cpu_affinity(cpus_chosen)
             return (True, logmsg)
 
     return (False, wait_reason)
@@ -183,4 +192,15 @@ def select_jobs_by_partial_id(jobs, partial_id):
     for j in jobs:
         if j.plot_id.startswith(partial_id):
             selected.append(j)
+    return selected
+
+def select_jobs_by_tmpdir(jobs, tmpdir_path) :
+    selected = []
+    for j in jobs:
+        # use string cmp to avoid file system look up like os.path.samefile does
+        # to avoid the case where the file system for a tmpdir is down
+        if os.path.abspath(j.tmpdir) == os.path.abspath(tmpdir_path):
+            selected.append(j)
+
+    print(selected)
     return selected

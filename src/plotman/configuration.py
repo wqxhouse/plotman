@@ -55,11 +55,16 @@ class Archive:
     rsyncd_bwlimit: int
     rsyncd_host: str
     rsyncd_user: str
+    max_concurrent_transfer: Optional[int] = None
     index: int = 0  # If not explicit, "index" will default to 0
 
 @attr.frozen
 class TmpOverrides:
     tmpdir_max_jobs: Optional[int] = None
+
+@attr.frozen
+class TmpNumaNode:
+    tmpdir_numa_node: int
 
 @attr.frozen
 class Directories:
@@ -68,6 +73,7 @@ class Directories:
     dst: Optional[List[str]] = None
     tmp2: Optional[str] = None
     tmp_overrides: Optional[Dict[str, TmpOverrides]] = None
+    tmp_numa_node: Optional[Dict[str, TmpNumaNode]] = None
     archive: Optional[Archive] = None
 
     def dst_is_tmp(self):
