@@ -255,7 +255,11 @@ def main():
                     temp_files = job.get_temp_files()
                     print('Will kill pid %d, plot id %s' % (job.proc.pid, job.plot_id))
                     print('Will delete %d temp files' % len(temp_files))
-                    conf = input('Are you sure? ("y" to confirm): ')
+
+                    if len(args.idprefix) > 1 and args.idprefix[1] == 'y':
+                        conf = 'y'
+                    else:
+                        conf = input('Are you sure? ("y" to confirm): ')
                     if (conf != 'y'):
                         print('canceled.  If you wish to resume the job, do so manually.')
                     else:
