@@ -424,9 +424,6 @@ class Job:
         # Phase 4 subphases are <started>
         phase_subphases = {}
         phase_subphases[1] = 1
-        phase_subphases[2] = 1
-        phase_subphases[3] = 1
-        phase_subphases[4] = 1
 
         with open(self.logfile, 'r') as f:
             for line in f:
@@ -436,9 +433,15 @@ class Job:
                 if m:
                     phase = int(m.group(1))
                     if phase == 2:
-                        phase_subphases[phase] = 7 - (int(m.group(2)) + 1)
+                        phase_subphases[phase] = 7 - int(m.group(2)) + (2 if "rewrite" in line else 1)
                     else :
                         phase_subphases[phase] = int(m.group(2)) + 1
+
+                # Phase 1 took 631.199 sec
+                m = re.match(r'^Phase (\d) took.*', line)
+                if m:
+                    phase = int(m.group(1)) + 1
+                    phase_subphases[phase] = 1
 
                 # # [P4] Starting to write C1 and C3 tables
                 # m = re.match(r'^\[P4\].*', line)
