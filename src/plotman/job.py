@@ -20,15 +20,22 @@ import psutil
 
 from plotman import chia
 
+def dir_cmp(d1, d2) :
+    if not d1.endswith('/') :
+        d1 += '/'
+    if not d2.endswith('/') :
+        d2 += '/'
+    return d1 == d2
+
 
 def job_phases_for_tmpdir(d, all_jobs):
     '''Return phase 2-tuples for jobs running on tmpdir d'''
-    return sorted([j.progress() for j in all_jobs if j.tmpdir == d])
+    return sorted([j.progress() for j in all_jobs if dir_cmp(j.tmpdir, d)])
 
 
 def job_phases_for_dstdir(d, all_jobs):
     '''Return phase 2-tuples for jobs outputting to dstdir d'''
-    return sorted([j.progress() for j in all_jobs if j.dstdir == d])
+    return sorted([j.progress() for j in all_jobs if dir_cmp(j.dstdir, d)])
 
 
 def is_plotting_cmdline(cmdline, madmax_proc_name):

@@ -216,8 +216,6 @@ def main():
         # Job control commands
         #
         elif args.cmd in [ 'details', 'files', 'kill', 'suspend', 'resume' ]:
-            print(args)
-
             selected = []
 
             # TODO: clean up treatment of wildcard
@@ -232,14 +230,20 @@ def main():
 
             else:
                 # TODO: allow multiple idprefixes, not just take the first
-                selected = manager.select_jobs_by_partial_id(jobs, args.idprefix[0])
+                for id in args.idprefix:
+                    matched_jobs = manager.select_jobs_by_partial_id(jobs, id)
+                    if matched_jobs:
+                        # TODO: handle match multiple
+                        selected.append(matched_jobs[0])
+                    print(selected)
+                # selected = manager.select_jobs_by_partial_id(jobs, args.idprefix[0])
                 if (len(selected) == 0):
                     print('Error: %s matched no jobs.' % args.idprefix[0])
-                elif len(selected) > 1:
-                    print('Error: "%s" matched multiple jobs:' % args.idprefix[0])
-                    for j in selected:
-                        print('  %s' % j.plot_id)
-                    selected = []
+                # elif len(selected) > 1:
+                #     print('Error: "%s" matched multiple jobs:' % args.idprefix[0])
+                #     for j in selected:
+                #         print('  %s' % j.plot_id)
+                #     selected = []
 
             for job in selected:
                 if args.cmd == 'details':
@@ -259,7 +263,7 @@ def main():
                     print('Will kill pid %d, plot id %s' % (job.proc.pid, job.plot_id))
                     print('Will delete %d temp files' % len(temp_files))
 
-                    if len(args.idprefix) > 1 and args.idprefix[1] == 'y':
+                    if len(args.idprefix) > 1 and args.idprefix[-1] == 'y':
                         conf = 'y'
                     else:
                         conf = input('Are you sure? ("y" to confirm): ')
@@ -273,7 +277,7 @@ def main():
                             print(f"Removing {f}...", end='')
                             os.remove(f)
                             # sleep 100ms between files to prevent ssd controller stop responding
-                            time.sleep(0.02)
+                            time.sleep(0.005)
                             print(f"Done!")
 
                 elif args.cmd == 'suspend':
