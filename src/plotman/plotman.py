@@ -163,12 +163,15 @@ def main():
                 args.bytmp, args.bybitfield)
 
     else:
-        jobs = Job.get_running_jobs(cfg.directories.log)
+        madmax_proc_name = None
+        if cfg.plotting.madmax and cfg.plotting.madmax_path :
+            madmax_proc_name = os.path.basename(cfg.plotting.madmax_path)
+        jobs = Job.get_running_jobs(cfg.directories.log, madmax_proc_name)
 
         # Status report
         if args.cmd == 'status':
             result = "{0}\n\n{1}\n\nUpdated at: {2}".format(
-                reporting.status_report_ex(jobs, get_term_width()),
+                reporting.status_report_ex(jobs, get_term_width(), madmax_proc_name),
                 reporting.summary(jobs),
                 datetime.datetime.today().strftime("%c"),
             )

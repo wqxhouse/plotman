@@ -23,6 +23,7 @@ HR = 3600   # Seconds
 
 MAX_AGE = 1000_000_000   # Arbitrary large number of seconds
 
+
 def dstdirs_to_furthest_phase(all_jobs):
     '''Return a map from dst dir to a phase tuple for the most progressed job
        that is emitting to that dst dir.'''
@@ -31,6 +32,7 @@ def dstdirs_to_furthest_phase(all_jobs):
         if not j.dstdir in result.keys() or result[j.dstdir] < j.progress():
             result[j.dstdir] = j.progress()
     return result
+
 
 def dstdirs_to_youngest_phase(all_jobs):
     '''Return a map from dst dir to a phase tuple for the least progressed job
@@ -42,6 +44,7 @@ def dstdirs_to_youngest_phase(all_jobs):
         if not j.dstdir in result.keys() or result[j.dstdir] > j.progress():
             result[j.dstdir] = j.progress()
     return result
+
 
 def phases_permit_new_job(phases, d, sched_cfg, dir_cfg):
     '''Scheduling logic: return True if it's OK to start a new job on a tmp dir
@@ -72,28 +75,34 @@ def phases_permit_new_job(phases, d, sched_cfg, dir_cfg):
 
     return True
 
+
 def maybe_start_new_plot(dir_cfg, sched_cfg, plotting_cfg):
     jobs = job.Job.get_running_jobs(dir_cfg.log)
 
-    wait_reason = None  # If we don't start a job this iteration, this says why.
+    # If we don't start a job this iteration, this says why.
+    wait_reason = None
 
-    youngest_job_age = min(jobs, key=job.Job.get_time_wall).get_time_wall() if jobs else MAX_AGE
+    youngest_job_age = min(
+        jobs, key=job.Job.get_time_wall).get_time_wall() if jobs else MAX_AGE
     global_stagger = int(sched_cfg.global_stagger_m * MIN)
     if (youngest_job_age < global_stagger):
         wait_reason = 'stagger (%ds/%ds)' % (youngest_job_age, global_stagger)
     elif len(jobs) >= sched_cfg.global_max_jobs:
-        wait_reason = 'max jobs (%d) - (%ds/%ds)' % (sched_cfg.global_max_jobs, youngest_job_age, global_stagger)
+        wait_reason = 'max jobs (%d) - (%ds/%ds)' % (
+            sched_cfg.global_max_jobs, youngest_job_age, global_stagger)
     else:
-        tmp_to_all_phases = [(d, job.job_phases_for_tmpdir(d, jobs)) for d in dir_cfg.tmp]
-        eligible = [ (d, phases) for (d, phases) in tmp_to_all_phases
-                if phases_permit_new_job(phases, d, sched_cfg, dir_cfg) ]
-        eligible = [ (d, phases) for (d, phases) in eligible
-                if int(plot_util.df_b(d) / plot_util.GB) != 0]
-        rankable = [ (d, phases[0]) if phases else (d, job.Phase(known=False))
-                for (d, phases) in eligible ]
+        tmp_to_all_phases = [(d, job.job_phases_for_tmpdir(d, jobs))
+                             for d in dir_cfg.tmp]
+        eligible = [(d, phases) for (d, phases) in tmp_to_all_phases
+                    if phases_permit_new_job(phases, d, sched_cfg, dir_cfg)]
+        eligible = [(d, phases) for (d, phases) in eligible
+                    if int(plot_util.df_b(d) / plot_util.GB) != 0]
+        rankable = [(d, phases[0]) if phases else (d, job.Phase(known=False))
+                    for (d, phases) in eligible]
 
         if not eligible:
-            wait_reason = 'no eligible tempdirs (%ds/%ds)' % (youngest_job_age, global_stagger)
+            wait_reason = 'no eligible tempdirs (%ds/%ds)' % (
+                youngest_job_age, global_stagger)
         else:
             # Plot to oldest tmpdir.
             tmpdir = max(rankable, key=operator.itemgetter(1))[0]
@@ -103,8 +112,8 @@ def maybe_start_new_plot(dir_cfg, sched_cfg, plotting_cfg):
             if dir_cfg.dst_is_tmp():
                 dstdir = tmpdir
             else:
-                dir2ph = { d:ph for (d, ph) in dstdirs_to_youngest_phase(jobs).items()
-                        if d in dst_dir and ph is not None}
+                dir2ph = {d: ph for (d, ph) in dstdirs_to_youngest_phase(jobs).items()
+                          if d in dst_dir and ph is not None}
                 unused_dirs = [d for d in dst_dir if d not in dir2ph.keys()]
                 dstdir = ''
                 if unused_dirs:
@@ -112,19 +121,50 @@ def maybe_start_new_plot(dir_cfg, sched_cfg, plotting_cfg):
                 else:
                     dstdir = max(dir2ph, key=dir2ph.get)
 
+            use_madmax = False
+            madmax_path = ''
+            if plotting_cfg.madmax is not None and plotting_cfg.madmax_path is not None:
+                use_madmax = plotting_cfg.madmax
+                madmax_path = plotting_cfg.madmax_path
+
             logfile = os.path.join(
-                dir_cfg.log, pendulum.now().isoformat(timespec='microseconds').replace(':', '_') + '.log'
+                dir_cfg.log, pendulum.now().isoformat(
+                    timespec='microseconds').replace(':', '_') + ('_madmax' if use_madmax else '') + '.log'
             )
 
-            plot_args = ['chia', 'plots', 'create',
-                    '-k', str(plotting_cfg.k),
-                    '-r', str(plotting_cfg.n_threads),
-                    '-u', str(plotting_cfg.n_buckets),
-                    '-b', str(plotting_cfg.job_buffer),
-                    '-t', tmpdir,
-                    '-d', dstdir ]
-            if plotting_cfg.e:
-                plot_args.append('-e')
+            tmp2dir = dir_cfg.tmp2
+
+            if use_madmax:
+                tmpdir = tmpdir.strip()
+                dstdir = dstdir.strip()
+                if tmp2dir:
+                    tmp2dir = tmp2dir.strip()
+                if not tmpdir.endswith('/'):
+                    tmpdir += '/'
+                if not dstdir.endswith('/'):
+                    dstdir += '/'
+                if tmp2dir and not tmp2dir.endswith('/'):
+                    tmp2dir += '/'
+
+            plot_args = []
+            if not use_madmax:
+                plot_args = ['chia', 'plots', 'create',
+                             '-k', str(plotting_cfg.k),
+                             '-r', str(plotting_cfg.n_threads),
+                             '-u', str(plotting_cfg.n_buckets),
+                             '-b', str(plotting_cfg.job_buffer),
+                             '-t', tmpdir,
+                             '-d', dstdir]
+            else:
+                plot_args = [madmax_path,
+                             '-r', str(plotting_cfg.n_threads),
+                             '-u', str(plotting_cfg.n_buckets),
+                             '-t', tmpdir,
+                             '-d', dstdir]
+
+            if not use_madmax:
+                if plotting_cfg.e:
+                    plot_args.append('-e')
             if plotting_cfg.farmer_pk is not None:
                 plot_args.append('-f')
                 plot_args.append(plotting_cfg.farmer_pk)
@@ -133,11 +173,13 @@ def maybe_start_new_plot(dir_cfg, sched_cfg, plotting_cfg):
                 plot_args.append(plotting_cfg.pool_pk)
             if dir_cfg.tmp2 is not None:
                 plot_args.append('-2')
-                plot_args.append(dir_cfg.tmp2)
-            if plotting_cfg.x:
-                plot_args.append('-x')  
+                plot_args.append(tmp2dir)
+            if not use_madmax:
+                if plotting_cfg.x:
+                    plot_args.append('-x')
 
-            logmsg = ('Starting plot job: %s ; logging to %s' % (' '.join(plot_args), logfile))
+            logmsg = ('Starting plot job: %s ; logging to %s' %
+                      (' '.join(plot_args), logfile))
 
             try:
                 open_log_file = open(logfile, 'x')
@@ -169,23 +211,24 @@ def maybe_start_new_plot(dir_cfg, sched_cfg, plotting_cfg):
             with open_log_file:
                 # start_new_sessions to make the job independent of this controlling tty.
                 p = subprocess.Popen(plot_args,
-                    stdout=open_log_file,
-                    stderr=subprocess.STDOUT,
-                    start_new_session=True)
+                                     stdout=open_log_file,
+                                     stderr=subprocess.STDOUT,
+                                     start_new_session=True)
 
             psutil.Process(p.pid).nice(15)
 
             # TODO: if -2 is specified, need to change numa node for -2 dir if it's different from -t
-            if dir_cfg.tmp_numa_node is not None and tmpdir in dir_cfg.tmp_numa_node :
+            if dir_cfg.tmp_numa_node is not None and tmpdir in dir_cfg.tmp_numa_node:
                 tmpdir_numa_node = dir_cfg.tmp_numa_node[tmpdir].tmpdir_numa_node
                 numa_cpu_list = plot_util.get_numa_cpu_list()
-                if tmpdir_numa_node < len(numa_cpu_list) :
+                if tmpdir_numa_node < len(numa_cpu_list):
                     cpus_chosen = numa_cpu_list[tmpdir_numa_node]
                     # print(cpus_chosen)
                     psutil.Process(p.pid).cpu_affinity(cpus_chosen)
             return (True, logmsg)
 
     return (False, wait_reason)
+
 
 def select_jobs_by_partial_id(jobs, partial_id):
     selected = []
@@ -194,7 +237,8 @@ def select_jobs_by_partial_id(jobs, partial_id):
             selected.append(j)
     return selected
 
-def select_jobs_by_tmpdir(jobs, tmpdir_path) :
+
+def select_jobs_by_tmpdir(jobs, tmpdir_path):
     selected = []
     for j in jobs:
         # use string cmp to avoid file system look up like os.path.samefile does

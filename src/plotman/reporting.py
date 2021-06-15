@@ -130,7 +130,7 @@ def status_report(jobs, width, height=None, tmp_prefix='', dst_prefix=''):
 
     return tab.draw()
 
-def status_report_ex(jobs, width, height=None, tmp_prefix='', dst_prefix=''):
+def status_report_ex(jobs, width, madmax_proc_name=None, height=None, tmp_prefix='', dst_prefix=''):
     '''height, if provided, will limit the number of rows in the table,
        showing first and last rows, row numbers and an elipsis in the middle.'''
     abbreviate_jobs_list = False
@@ -154,8 +154,11 @@ def status_report_ex(jobs, width, height=None, tmp_prefix='', dst_prefix=''):
     tab.set_cols_align('r' * len(headings))
     tab.set_header_align('r' * len(headings))
 
+    proc_name = 'chia'
+    if madmax_proc_name :
+        proc_name = madmax_proc_name
   
-    out = subprocess.check_output("ps -U $USER -LP | egrep 'chia$|PID'", shell=True, start_new_session=True).decode('utf-8')
+    out = subprocess.check_output(f"ps -U $USER -LP | egrep '{proc_name}$|PID'", shell=True, start_new_session=True).decode('utf-8')
     process_cpu_info_arr = out.split("\n")[1:]
     pid_to_thread_info = {}
     for entry in process_cpu_info_arr:

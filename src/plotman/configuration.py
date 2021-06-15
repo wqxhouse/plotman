@@ -58,13 +58,16 @@ class Archive:
     max_concurrent_transfer: Optional[int] = None
     index: int = 0  # If not explicit, "index" will default to 0
 
+
 @attr.frozen
 class TmpOverrides:
     tmpdir_max_jobs: Optional[int] = None
 
+
 @attr.frozen
 class TmpNumaNode:
     tmpdir_numa_node: int
+
 
 @attr.frozen
 class Directories:
@@ -97,7 +100,9 @@ class Scheduling:
     tmpdir_max_jobs: int
     tmpdir_stagger_phase_major: int
     tmpdir_stagger_phase_minor: int
-    tmpdir_stagger_phase_limit: int = 1  # If not explicit, "tmpdir_stagger_phase_limit" will default to 1
+    # If not explicit, "tmpdir_stagger_phase_limit" will default to 1
+    tmpdir_stagger_phase_limit: int = 1
+
 
 @attr.frozen
 class Plotting:
@@ -109,10 +114,14 @@ class Plotting:
     farmer_pk: Optional[str] = None
     pool_pk: Optional[str] = None
     x: bool = False
+    madmax: Optional[bool] = None
+    madmax_path: Optional[str] = None
+
 
 @attr.frozen
 class UserInterface:
     use_stty_size: bool = True
+
 
 @attr.frozen
 class PlotmanConfig:
