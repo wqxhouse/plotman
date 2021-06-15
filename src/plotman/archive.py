@@ -167,25 +167,37 @@ def get_archdir_freebytes(arch_cfg):
     return archdir_freebytes
 
 def rsync_dest(arch_cfg, arch_dir):
-    rsync_path = arch_dir.replace(arch_cfg.rsyncd_path, arch_cfg.rsyncd_module)
-    if rsync_path.startswith('/'):
-        rsync_path = rsync_path[1:]  # Avoid dup slashes.  TODO use path join?
-    rsync_url = 'rsync://%s@%s:12000/%s' % (
-            arch_cfg.rsyncd_user, arch_cfg.rsyncd_host, rsync_path)
+    if arch_cfg.rsyncd_host.lower().strip() != "localhost":
+        rsync_path = arch_dir.replace(arch_cfg.rsyncd_path, arch_cfg.rsyncd_module)
+        if rsync_path.startswith('/'):
+            rsync_path = rsync_path[1:]  # Avoid dup slashes.  TODO use path join?
+        rsync_url = 'rsync://%s@%s:12000/%s' % (
+                arch_cfg.rsyncd_user, arch_cfg.rsyncd_host, rsync_path)
+    else :
+        rsync_url = arch_dir
     return rsync_url
 
 def get_running_archive_logs(cfg_directories) :
     arch_jobs = get_running_archive_jobs(cfg_directories.archive)
     archive_file_name_regex = os.path.join(cfg_directories.log, "archive_out_plot-.{1,}\.log")
+    file_path_to_pids = {}
     for j in arch_jobs:
         pid = j[0]
         out = subprocess.check_output(f"lsof -p {pid}", shell=True, start_new_session=True).decode('utf-8')
         result = re.search(archive_file_name_regex, out)
         if result :
             file_path = out[result.start() : result.end()]
-            print(f"PID {pid}: {file_path}")
-            with open(file_path, 'r') as f:
-                print([i for i in f.read().split('\n') if i][-1])
+            if file_path not in file_path_to_pids:
+                file_path_to_pids[file_path] = [pid]
+            else :
+                file_path_to_pids[file_path].append(pid)
+
+
+    print(f"Archive count: {len(file_path_to_pids)}")
+    for file_path, pids in file_path_to_pids.items() :
+        print(f"PID {pids}: {file_path}")
+        with open(file_path, 'r') as f:
+            print([i for i in f.read().split('\n') if i][-1])
 
 # TODO: maybe consolidate with similar code in job.py?
 def get_running_archive_jobs(arch_cfg):
@@ -251,6 +263,9 @@ def archive(dir_cfg, all_jobs, arch_jobs):
         return (False, "No 'archive' settings declared in plotman.yaml")
 
     max_arch_jobs = dir_cfg.archive.max_concurrent_transfer if dir_cfg.archive.max_concurrent_transfer else 1
+    if dir_cfg.archive.rsyncd_host.lower().strip() == 'localhost':
+        # * 3 because local rsync has 3 threads
+        max_arch_jobs *= 3
     if len(arch_jobs) >= max_arch_jobs :
         return (False, None)
 
