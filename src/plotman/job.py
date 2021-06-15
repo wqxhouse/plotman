@@ -20,10 +20,11 @@ import psutil
 
 from plotman import chia
 
-def dir_cmp(d1, d2) :
-    if not d1.endswith('/') :
+
+def dir_cmp(d1, d2):
+    if not d1.endswith('/'):
         d1 += '/'
-    if not d2.endswith('/') :
+    if not d2.endswith('/'):
         d2 += '/'
     return d1 == d2
 
@@ -440,8 +441,12 @@ class Job:
                 if m:
                     phase = int(m.group(1))
                     if phase == 2:
-                        phase_subphases[phase] = 7 - int(m.group(2)) + (2 if "rewrite" in line else 1)
-                    else :
+                        phase_subphases[phase] = 7 - \
+                            int(m.group(2)) + (2 if "rewrite" in line else 1)
+                    elif phase == 3:
+                        phase_subphases[phase] = int(
+                            m.group(2)) + (1 if "final" in line else 0)
+                    else:
                         phase_subphases[phase] = int(m.group(2)) + 1
 
                 # Phase 1 took 631.199 sec
@@ -575,7 +580,8 @@ class Job:
             full_plot_id = m.group(1)
         else:
             full_plot_id_start = single_file_path.find(self.plot_id)
-            full_plot_id_end = single_file_path.find(".plot", full_plot_id_start)
+            full_plot_id_end = single_file_path.find(
+                ".plot", full_plot_id_start)
             full_plot_id = single_file_path[full_plot_id_start: full_plot_id_end]
         glob_path = os.path.join(os.path.dirname(
             single_file_path), f"*{full_plot_id}*")
