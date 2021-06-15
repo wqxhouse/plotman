@@ -199,7 +199,7 @@ def main():
                     if not firstit:
                         print('Sleeping 60s until next iteration...')
                         time.sleep(60)
-                        jobs = Job.get_running_jobs(cfg.directories.log)
+                        jobs = Job.get_running_jobs(cfg.directories.log, madmax_proc_name)
                     firstit = False
 
                     archiving_status, log_message = archive.spawn_archive_process(cfg.directories, jobs)

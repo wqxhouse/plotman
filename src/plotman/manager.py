@@ -77,7 +77,10 @@ def phases_permit_new_job(phases, d, sched_cfg, dir_cfg):
 
 
 def maybe_start_new_plot(dir_cfg, sched_cfg, plotting_cfg):
-    jobs = job.Job.get_running_jobs(dir_cfg.log)
+    madmax_proc_name = None
+    if plotting_cfg.madmax and plotting_cfg.madmax_path :
+        madmax_proc_name = os.path.basename(plotting_cfg.madmax_path)
+    jobs = job.Job.get_running_jobs(dir_cfg.log, madmax_proc_name)
 
     # If we don't start a job this iteration, this says why.
     wait_reason = None

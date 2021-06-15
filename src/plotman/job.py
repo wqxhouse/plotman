@@ -563,9 +563,13 @@ class Job:
 
         # Some associated files are not opened by the process at a specific time, so a glob
         # through the directory is necessary
-        full_plot_id_start = single_file_path.find(self.plot_id)
-        full_plot_id_end = single_file_path.find(".plot", full_plot_id_start)
-        full_plot_id = single_file_path[full_plot_id_start: full_plot_id_end]
+        m = re.match(r'.*plot-k32-.*-([0-9a-f]*)\..*tmp', single_file_path)
+        if m:
+            full_plot_id = m.group(1)
+        else:
+            full_plot_id_start = single_file_path.find(self.plot_id)
+            full_plot_id_end = single_file_path.find(".plot", full_plot_id_start)
+            full_plot_id = single_file_path[full_plot_id_start: full_plot_id_end]
         glob_path = os.path.join(os.path.dirname(
             single_file_path), f"*{full_plot_id}*")
         temp_files = glob.glob(glob_path)
